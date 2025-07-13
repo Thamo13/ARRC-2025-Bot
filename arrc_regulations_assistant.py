@@ -17,12 +17,12 @@ import faiss
 from sentence_transformers import SentenceTransformer
 
     # ---------------- Config ----------------
-    MODEL_NAME = "BAAI/bge-base-en-v1.5"
-    PDF_PATH = Path("Regulations.pdf")        # PDF in repo root
-    INDEX_PATH = Path("arrc_2025.faiss")
-    META_PATH = Path("arrc_2025_meta.json")
-    CHUNK_SIZE = 120                          # words
-    TOP_K = 3
+MODEL_NAME = "BAAI/bge-base-en-v1.5"
+PDF_PATH = Path("Regulations.pdf")        # PDF in repo root
+INDEX_PATH = Path("arrc_2025.faiss")
+META_PATH = Path("arrc_2025_meta.json")
+CHUNK_SIZE = 120                          # words
+TOP_K = 3
 
     # --------------- Helpers ----------------
     @st.cache_resource(show_spinner=False)
