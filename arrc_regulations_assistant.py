@@ -8,14 +8,13 @@
         - If OPENAI_API_KEY is set in env → GPT‑4o 2‑line summary
         - Else → first sentence of best matching chunk
     · Always shows matching clause for citation
-    """
-
-    from pathlib import Path
-    import os, re, textwrap, json
-    import streamlit as st
-    import pdfplumber
-    import faiss
-    from sentence_transformers import SentenceTransformer
+"""
+from pathlib import Path
+import os, re, textwrap, json
+import streamlit as st
+import pdfplumber
+import faiss
+from sentence_transformers import SentenceTransformer
 
     # ---------------- Config ----------------
     MODEL_NAME = "BAAI/bge-base-en-v1.5"
