@@ -1,4 +1,5 @@
-"""ARRC Regulations Assistant – Streamlit app
+
+    """ARRC Regulations Assistant – Streamlit app
 
     Features
     --------
