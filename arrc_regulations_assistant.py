@@ -68,23 +68,26 @@ def load_metadata(meta_path=META_PATH):
     with open(meta_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+import re, textwrap
+
 def answer_query(query, model, index, metadata, top_k=TOP_K):
     if index is None:
-        return "❗ Index not found. Build it first from the sidebar.", None
+        return "❗ Index not built yet.", None
+
     q_emb = model.encode([query], convert_to_numpy=True)
     faiss.normalize_L2(q_emb)
-    D, I = index.search(q_emb, top_k)  # distances, indices
-    results = []
-    for score, idx in zip(D[0], I[0]):
-        if idx == -1:
-            continue
-        chunk = metadata[idx]
-        results.append({"score": float(score), "text": chunk["text"]})
-    if not results:
+    D, I = index.search(q_emb, top_k)
+
+    if I[0][0] == -1:
         return "Information not found in current regulations.", None
-    # Simple answer: return the text of best chunk
-    best = results[0]["text"]
-    return best, results
+
+    best_chunk = metadata[I[0][0]]["text"]
+    # first sentence = everything up to first period or newline
+    headline = re.split(r"[\\.\\n]", best_chunk, maxsplit=1)[0].strip()
+
+    answer = textwrap.fill(headline, 80)  # wrap nicely
+    return answer, [{"score": float(D[0][0]), "text": best_chunk}]
+
 
 # ---------- Streamlit UI ----------
 st.set_page_config(page_title="ARRC Regulations Assistant", layout="wide")
