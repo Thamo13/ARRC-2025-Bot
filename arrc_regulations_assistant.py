@@ -20,7 +20,7 @@ PDF_PATH = Path("Regulations.pdf")
 INDEX_PATH = Path("arrc_2025.faiss")
 META_PATH = Path("arrc_2025_meta.json")
 
-CHUNK_SIZE = 300  # words
+CHUNK_SIZE = 120  # words
 TOP_K = 3
 
 @st.cache_resource(show_spinner=False)
