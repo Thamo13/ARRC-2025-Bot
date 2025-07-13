@@ -62,18 +62,26 @@ def load_meta():
 
 # ---------- Answer logic ----------
 def first_sentence(text: str) -> str:
-    # First sentence (stop at first period or line break)
-    sent = re.split(r"[.\n]", text, maxsplit=1)[0].strip()
+    # Split into sentences first
+    sentences = re.split(r"[.\n]", text)
+    if not sentences:
+        return ""
 
-    # Strip boiler-plate lead-ins like:
-    #   “as below 1”  | “as below 1.21.2.3 –” | “see below 3.4:”
-    sent = re.sub(
+    # Clean the first sentence
+    head = sentences[0].strip()
+    head = re.sub(
         r"^(?:as (?:per )?below|see below)\s*\d+(?:\.\d+)*\s*[:\-–]?\s*",
         "",
-        sent,
+        head,
         flags=re.I,
-    )
-    return sent
+    ).strip()
+
+    # If nothing left, fall back to the next sentence
+    if not head and len(sentences) > 1:
+        head = sentences[1].strip()
+
+    return head
+
 
 
 
