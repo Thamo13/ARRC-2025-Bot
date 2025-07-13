@@ -62,10 +62,19 @@ def load_meta():
 
 # ---------- Answer logic ----------
 def first_sentence(text: str) -> str:
-    sent = re.split(r"[\.\\n]", text, maxsplit=1)[0].strip()
-    # Strip common lead-ins
-    sent = re.sub(r"^(as below|as per below|see below)\\s*\\d*[:\\-]?\\s*", "", sent, flags=re.I)
+    # First sentence (stop at first period or line break)
+    sent = re.split(r"[.\n]", text, maxsplit=1)[0].strip()
+
+    # Strip boiler-plate lead-ins like:
+    #   “as below 1”  | “as below 1.21.2.3 –” | “see below 3.4:”
+    sent = re.sub(
+        r"^(?:as (?:per )?below|see below)\s*\d+(?:\.\d+)*\s*[:\-–]?\s*",
+        "",
+        sent,
+        flags=re.I,
+    )
     return sent
+
 
 
 def gpt_summary(context: str, question: str):
