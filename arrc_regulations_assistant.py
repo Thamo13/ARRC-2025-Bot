@@ -16,7 +16,7 @@ import faiss
 from sentence_transformers import SentenceTransformer, util
 
 MODEL_NAME = "BAAI/bge-base-en-v1.5"
-PDF_PATH = Path("data/Regulations.pdf")
+PDF_PATH = Path("Regulations.pdf")
 INDEX_PATH = Path("arrc_2025.faiss")
 META_PATH = Path("arrc_2025_meta.json")
 
