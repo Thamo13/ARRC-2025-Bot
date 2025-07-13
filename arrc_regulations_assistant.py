@@ -1,127 +1,131 @@
-# ARRC Regulations Assistant – Streamlit app (refined)
-# --------------------------------------------------------------
-# Key tweaks vs. first version
-# • Smaller chunks (120‑word)  → tighter clause matches
-# • Headline answer = first sentence of best chunk (plain, 1‑liner)
-# • Still runs 100 % offline; no OpenAI key required
-# • If you *do* add OPENAI_API_KEY to Streamlit Secrets, it will auto‑switch
-#   to a GPT‑4o summary for an even cleaner 2‑line answer.
 
-import os
-import json
-import re
-from pathlib import Path
-import textwrap
-import streamlit as st
-import pdfplumber
-import faiss
-from sentence_transformers import SentenceTransformer
+    """ARRC Regulations Assistant – Streamlit app
 
-# ---------------------------- config ----------------------------
-MODEL_NAME = "BAAI/bge-base-en-v1.5"
-PDF_PATH   = Path("Regulations.pdf")            # now looks in repo root
-INDEX_PATH = Path("arrc_2025.faiss")
-META_PATH  = Path("arrc_2025_meta.json")
-CHUNK_SIZE = 120      # words per chunk (was 300)
-TOP_K      = 3
+    Features
+    --------
+    · Works offline once the embedding model is cached (Sentence‑Transformers bge-base-en-v1.5)
+    · Chunk size 120 words → focused retrieval
+    · Headline answer:
+        - If OPENAI_API_KEY is set in env → GPT‑4o 2‑line summary
+        - Else → first sentence of best matching chunk
+    · Always shows matching clause for citation
+    """
 
-# optional GPT polish
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if OPENAI_API_KEY:
-    import openai
-    openai.api_key = OPENAI_API_KEY
+    from pathlib import Path
+    import os, re, textwrap, json
+    import streamlit as st
+    import pdfplumber
+    import faiss
+    from sentence_transformers import SentenceTransformer
 
-# ------------------------- helpers ------------------------------
-@st.cache_resource(show_spinner=False)
-def get_model():
-    return SentenceTransformer(MODEL_NAME)
+    # ---------------- Config ----------------
+    MODEL_NAME = "BAAI/bge-base-en-v1.5"
+    PDF_PATH = Path("Regulations.pdf")        # PDF in repo root
+    INDEX_PATH = Path("arrc_2025.faiss")
+    META_PATH = Path("arrc_2025_meta.json")
+    CHUNK_SIZE = 120                          # words
+    TOP_K = 3
 
-def pdf_to_chunks(pdf_path: Path, chunk_size: int = CHUNK_SIZE):
-    pages = []
-    with pdfplumber.open(str(pdf_path)) as pdf:
-        for page in pdf.pages:
-            pages.append(page.extract_text() or "")
-    words = "\n".join(pages).split()
-    chunks = []
-    for i in range(0, len(words), chunk_size):
-        txt = " ".join(words[i : i + chunk_size])
-        title = " ".join(words[i : i + 8]) + "…"
-        chunks.append({"text": txt, "title": title})
-    return chunks
+    # --------------- Helpers ----------------
+    @st.cache_resource(show_spinner=False)
+    def load_model():
+        return SentenceTransformer(MODEL_NAME)
 
-def build_index(chunks, model):
-    emb = model.encode([c["text"] for c in chunks], convert_to_numpy=True, show_progress_bar=True)
-    faiss.normalize_L2(emb)
-    index = faiss.IndexFlatIP(emb.shape[1])
-    index.add(emb)
-    faiss.write_index(index, str(INDEX_PATH))
-    META_PATH.write_text(json.dumps(chunks, ensure_ascii=False))
-    return index
+    def pdf_to_chunks(pdf_path: Path, chunk_size: int):
+        pages = []
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            for page in pdf.pages:
+                pages.append(page.extract_text() or "")
+        words = " ".join(pages).split()
+        chunks, meta = [], []
+        for i in range(0, len(words), chunk_size):
+            chunk_words = words[i:i + chunk_size]
+            text = " ".join(chunk_words)
+            meta.append({"text": text})
+            chunks.append(text)
+        return chunks, meta
 
-def load_index():
-    return faiss.read_index(str(INDEX_PATH)) if INDEX_PATH.exists() else None
+    def build_index(text_chunks, meta):
+        model = load_model()
+        emb = model.encode(text_chunks, convert_to_numpy=True, show_progress_bar=True)
+        faiss.normalize_L2(emb)
+        index = faiss.IndexFlatIP(emb.shape[1])
+        index.add(emb)
+        faiss.write_index(index, str(INDEX_PATH))
+        META_PATH.write_text(json.dumps(meta, ensure_ascii=False))
+        return index
 
-def load_meta():
-    return json.loads(META_PATH.read_text()) if META_PATH.exists() else []
+    def load_index():
+        if not INDEX_PATH.exists():
+            return None
+        return faiss.read_index(str(INDEX_PATH))
 
-# ---------------------- answer engine ---------------------------
+    def load_meta():
+        if META_PATH.exists():
+            return json.loads(META_PATH.read_text())
+        return []
 
-def first_sentence(text: str) -> str:
-    return re.split(r"[\.\n]", text, maxsplit=1)[0].strip()
+    # ---------- Answer logic ----------
+    def first_sentence(text: str) -> str:
+        return re.split(r"[\.\n]", text, maxsplit=1)[0].strip()
 
+    def gpt_summary(context: str, question: str):
+        key = os.getenv("OPENAI_API_KEY")
+        if not key:
+            return None
+        import openai
+        openai.api_key = key
+        resp = openai.ChatCompletion.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "Answer in 2 short lines, plain English."},
+                {"role": "user", "content": f"Regulation text:\n{context}\n\nQuestion: {question}"}
+            ],
+            temperature=0
+        )
+        return resp.choices[0].message.content.strip()
 
-def gpt_summary(context: str, question: str) -> str | None:
-    if not OPENAI_API_KEY:
-        return None
-    resp = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "Answer in 1‑2 short lines, plain English."},
-            {"role": "user", "content": f"Regulation text:\n{context}\n\nQuestion: {question}"},
-        ],
-    )
-    return resp.choices[0].message.content.strip()
+    def answer_query(q, index, meta):
+        if index is None:
+            return "❗ Index not built yet.", None
+        model = load_model()
+        q_emb = model.encode([q], convert_to_numpy=True)
+        faiss.normalize_L2(q_emb)
+        D, I = index.search(q_emb, TOP_K)
 
+        if I[0][0] == -1:
+            return "Information not found in current regulations.", None
 
-def answer_query(q: str, model, index, meta):
-    if index is None:
-        return "❗ Index not built yet.", []
-    q_emb = model.encode([q], convert_to_numpy=True)
-    faiss.normalize_L2(q_emb)
-    D, I = index.search(q_emb, TOP_K)
-    if I[0][0] == -1:
-        return "Information not found in current regulations.", []
-    best = meta[I[0][0]]["text"]
-    headline = gpt_summary(best, q) or first_sentence(best)
-    headline = textwrap.fill(headline, 90)
-    return headline, [meta[idx]["text"] for idx in I[0] if idx != -1]
+        best = meta[I[0][0]]["text"]
+        headline = gpt_summary(best, q) or first_sentence(best)
+        return headline, [{"score": float(D[0][0]), "text": best}]
 
-# --------------------------- UI --------------------------------
-st.set_page_config(page_title="ARRC Regulations Assistant", layout="wide")
-model = get_model()
+    # -------------- Streamlit UI --------------
+    st.set_page_config(page_title="ARRC Regulations Assistant", layout="wide")
+    st.title("🏁 ARRC Regulations Assistant")
 
-with st.sidebar:
-    st.header("Index management")
-    if st.button("Build / Refresh Index"):
-        if not PDF_PATH.exists():
-            st.error(f"PDF not found at {PDF_PATH}")
-            st.stop()
-        st.info("Building index… please wait ⏳")
-        idx = build_index(pdf_to_chunks(PDF_PATH), model)
-        st.success("Index built ✅. You can now ask questions.")
-    st.write("PDF path:", PDF_PATH.name)
-    st.write("Index path:", INDEX_PATH.name)
+    with st.sidebar:
+        st.header("Index management")
+        if st.button("Build / Refresh Index"):
+            if not PDF_PATH.exists():
+                st.error(f"PDF not found at {PDF_PATH}")
+                st.stop()
+            st.info("Building index… this may take up to a minute.")
+            chunks, meta = pdf_to_chunks(PDF_PATH, CHUNK_SIZE)
+            build_index(chunks, meta)
+            st.success("Index built ✅. You can now ask questions.")
+        st.markdown(f"""**PDF path:** `{PDF_PATH.name}`  
+**Index path:** `{INDEX_PATH.name}`""")
 
-index = load_index()
-meta  = load_meta()
+    index = load_index()
+    meta = load_meta()
 
-st.title("🏁 ARRC Regulations Assistant")
-query = st.text_input("Ask a question about the regulations:")
-if query:
-    headline, clauses = answer_query(query, model, index, meta)
-    st.subheader("Answer")
-    st.write(headline)
-    if clauses:
-        st.subheader("Matching clause(s)")
-        for txt in clauses:
-            st.write("-", txt[:400] + ("…" if len(txt) > 400 else ""))
+    q = st.text_input("Ask a question about the regulations:")
+    if q:
+        answer, matches = answer_query(q, index, meta)
+        st.write("### Answer")
+        st.write(answer)
+        if matches:
+            st.write("---")
+            st.write("### Matching clause")
+            st.write(matches[0]["text"])
