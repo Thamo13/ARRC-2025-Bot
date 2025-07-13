@@ -62,7 +62,11 @@ def load_meta():
 
 # ---------- Answer logic ----------
 def first_sentence(text: str) -> str:
-    return re.split(r"[\.\n]", text, maxsplit=1)[0].strip()
+    sent = re.split(r"[\.\\n]", text, maxsplit=1)[0].strip()
+    # Strip common lead-ins
+    sent = re.sub(r"^(as below|as per below|see below)\\s*\\d*[:\\-]?\\s*", "", sent, flags=re.I)
+    return sent
+
 
 def gpt_summary(context: str, question: str):
     key = os.getenv("OPENAI_API_KEY")
