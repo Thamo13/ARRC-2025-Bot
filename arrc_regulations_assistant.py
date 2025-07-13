@@ -25,7 +25,7 @@ CHUNK_SIZE = 120                          # words
 TOP_K = 3
 
     # --------------- Helpers ----------------
-    @st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False)
     def load_model():
         return SentenceTransformer(MODEL_NAME)
 
