@@ -26,22 +26,22 @@ TOP_K = 3
 
     # --------------- Helpers ----------------
 @st.cache_resource(show_spinner=False)
-    def load_model():
-        return SentenceTransformer(MODEL_NAME)
+def load_model():
+return SentenceTransformer(MODEL_NAME)
 
-    def pdf_to_chunks(pdf_path: Path, chunk_size: int):
-        pages = []
-        with pdfplumber.open(str(pdf_path)) as pdf:
-            for page in pdf.pages:
-                pages.append(page.extract_text() or "")
-        words = " ".join(pages).split()
-        chunks, meta = [], []
-        for i in range(0, len(words), chunk_size):
-            chunk_words = words[i:i + chunk_size]
-            text = " ".join(chunk_words)
-            meta.append({"text": text})
-            chunks.append(text)
-        return chunks, meta
+def pdf_to_chunks(pdf_path: Path, chunk_size: int):
+pages = []
+with pdfplumber.open(str(pdf_path)) as pdf:
+for page in pdf.pages:
+pages.append(page.extract_text() or "")
+words = " ".join(pages).split()
+chunks, meta = [], []
+for i in range(0, len(words), chunk_size):
+chunk_words = words[i:i + chunk_size]
+text = " ".join(chunk_words)
+meta.append({"text": text})
+chunks.append(text)
+return chunks, meta
 
     def build_index(text_chunks, meta):
         model = load_model()
